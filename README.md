@@ -1,8 +1,11 @@
 Folder structure this file resides in
 
+```
 ./
-	./../forgegradle	-> contains gradlew.bat along with the new forge setup
-	./**/        		-> contains the Eclipse Workspace with projects in it. There is a master gradle build file each project accesses
+  ./../forgegradle  -> contains gradlew.bat along with the new forge setup
+  ./**/             -> contains the Eclipse Workspace with projects in it.
+                       There is a master gradle build file each project accesses
+```
 
 To setup my workspace in your eclipse, simply setup Forge, then move your eclipse workspace into this folder.
 
