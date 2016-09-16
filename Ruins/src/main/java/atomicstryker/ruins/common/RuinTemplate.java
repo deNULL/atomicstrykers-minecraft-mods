@@ -356,10 +356,126 @@ public class RuinTemplate
             }
             iy++;
         }
+        
+        // Check all required adjoining templates, because they will stop us from generating
+    	return doAdjoiningStuff(world, xBase, newY, zBase, rotate, null, true);
+    }
     
-
-        // looks like a good spot!
-        return newY;
+    private int doAdjoiningStuff(World world, int xBase, int y, int zBase, int rotate, Random buildRandom, boolean checkOnly) {
+    	Random rand = new Random(world.getSeed() + xBase * 13 + y * 199933 + zBase * 479001599);
+        for (AdjoiningTemplateData ad : adjoiningTemplates)
+        {
+        	if (ad.group != null)
+        	{
+        		continue;
+        	}
+        	
+            if (!doAdjoiningTemplate(ad, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly))
+            {
+            	return -1;
+            }
+        }
+        for (AdjoiningGroupData group : adjoiningGroups.values())
+        {
+        	float randres = (rand.nextFloat() * 100);
+            if (randres < group.spawnChance)
+            {
+            	int childs = Math.min(group.childs.size(), group.minChilds + rand.nextInt(group.maxChilds - group.minChilds + 1));
+            	int available = group.childs.size();
+            	int added = 0;
+            	boolean[] tried = new boolean[available];
+            	while (added < childs && available > 0) {
+            		int pos = rand.nextInt(available);
+            		int index = 0;
+            		for (int j = 0; j < tried.length; j++) {
+            			if (tried[j]) {
+            				continue;
+            			}
+            			if (index == pos) {
+            				tried[j] = true;
+            				available--;
+            				AdjoiningTemplateData template = group.childs.get(j);
+        	        		if (doAdjoiningTemplate(template, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly)) {
+        	        			added++;
+        	        		}
+            			} else {
+            				index++;
+            			}
+            		}
+            	}
+            	
+            	if (group.isRequired && added < group.minChilds) {
+            		// Unable to satisfy min/maxChilds condition
+            		return -1;
+            	}
+            }
+        }
+        return y;
+    }
+    
+    private boolean doAdjoiningTemplate(AdjoiningTemplateData template, World world, int xBase, int y, int zBase, int rotate, Random rand, Random buildRandom, boolean checkOnly)
+    {
+    	int x, z, xDim, zDim;
+    	boolean eastwest;
+    	
+    	if ((rotate == RuinsMod.DIR_EAST) || (rotate == RuinsMod.DIR_WEST))
+        {
+            eastwest = true;
+            x = xBase + l_off;
+            xDim = length;
+            z = zBase + w_off;
+            zDim = width;
+        }
+        else
+        {
+            eastwest = false;
+            x = xBase + w_off;
+            xDim = width;
+            z = zBase + l_off;
+            zDim = length;
+        }
+    	
+    	float randres = (rand.nextFloat() * 100);
+        if (randres < template.spawnchance)
+        {
+            int newrot = rand.nextInt(4);
+            int targetX = xBase + template.relativeX;
+            int targetZ = zBase + template.relativeZ;
+            
+            if (!checkOnly || template.isRequired) {
+            	int targetY = template.adjoiningTemplate.checkArea(world, targetX, y, targetZ, newrot, template.acceptableY);
+            	if (targetY > 0 && Math.abs(y - targetY) <= template.acceptableY)
+                {
+            		if (!checkOnly) {
+	                    if (MinecraftForge.EVENT_BUS.post(new EventRuinTemplateSpawn(world, template.adjoiningTemplate, targetX, targetY, targetZ, newrot, false, true)))
+	                    {
+	                        debugPrinter.printf("Forge Event came back negative, no spawn\n");
+	                        return false;
+	                    }
+	                    debugPrinter.printf("Creating adjoining %s of Ruin %s at [%d|%d|%d], rot:%d\n", template.adjoiningTemplate.getName(), getName(), targetX, targetY, targetZ, newrot);
+	                    int finalY = template.adjoiningTemplate.doBuild(world, buildRandom, targetX, targetY, targetZ, newrot);
+	                    if (finalY > 0)
+	                    {
+	                        MinecraftForge.EVENT_BUS.post(new EventRuinTemplateSpawn(world, template.adjoiningTemplate, targetX, finalY, targetZ, newrot, false, false));
+	                    }
+            		}
+                }
+                else
+                {
+                	if (checkOnly) {
+                		return false;
+                	}
+                    debugPrinter.printf("Adjoining area around [%d|%d|%d] was rejected, targetY:%d, diff:%d\n", targetX, y, targetZ, targetY, Math.abs(y-targetY));
+                }
+            }
+            
+            return true;
+        }
+        else
+        {
+            debugPrinter.printf("Spawnchance [%.2f] too low. Random got [%.2f], no spawn\n", template.spawnchance, randres);
+            return false;
+        }
     }
 
     public RuinData getRuinData(int x, int y, int z, int rotate)
@@ -541,40 +657,7 @@ public class RuinTemplate
         bonemealMarkers.clear();
         
         // TODO test this
-        for (AdjoiningTemplateData ad : adjoiningTemplates)
-        {
-            debugPrinter.printf("Considering to spawn adjoining %s of Ruin %s...\n", ad.adjoiningTemplate.getName(), getName());
-            float randres = (world.rand.nextFloat() * 100);
-            if (randres < ad.spawnchance)
-            {
-                int newrot = world.rand.nextInt(4);
-                int targetX = xBase+ad.relativeX;
-                int targetZ = zBase+ad.relativeZ;
-                int targetY = ad.adjoiningTemplate.checkArea(world, targetX, y, targetZ, newrot, ad.acceptableY);
-                if (targetY > 0 && Math.abs(y-targetY) <= ad.acceptableY)
-                {
-                    if (MinecraftForge.EVENT_BUS.post(new EventRuinTemplateSpawn(world, ad.adjoiningTemplate, targetX, targetY, targetZ, newrot, false, true)))
-                    {
-                        debugPrinter.printf("Forge Event came back negative, no spawn\n");
-                        continue;
-                    }
-                    debugPrinter.printf("Creating adjoining %s of Ruin %s at [%d|%d|%d], rot:%d\n", ad.adjoiningTemplate.getName(), getName(), targetX, targetY, targetZ, newrot);
-                    int finalY = ad.adjoiningTemplate.doBuild(world, random, targetX, targetY, targetZ, newrot);
-                    if (finalY > 0)
-                    {
-                        MinecraftForge.EVENT_BUS.post(new EventRuinTemplateSpawn(world, ad.adjoiningTemplate, targetX, finalY, targetZ, newrot, false, false));
-                    }
-                }
-                else
-                {
-                    debugPrinter.printf("Adjoining area around [%d|%d|%d] was rejected, targetY:%d, diff:%d\n", targetX, y, targetZ, targetY, Math.abs(y-targetY));
-                }
-            }
-            else
-            {
-                debugPrinter.printf("Spawnchance [%.2f] too low. Random got [%.2f], no spawn\n", ad.spawnchance, randres);
-            }
-        }
+        doAdjoiningStuff(world, xBase, y, zBase, rotate, random, false);
         
         return yReturn;
     }
