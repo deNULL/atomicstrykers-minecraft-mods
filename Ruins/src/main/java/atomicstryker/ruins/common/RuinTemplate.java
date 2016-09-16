@@ -2,7 +2,9 @@ package atomicstryker.ruins.common;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +25,7 @@ import cpw.mods.fml.common.registry.GameData;
 public class RuinTemplate
 {
 
+    private final String filename;
     private final String name;
     private Block[] acceptedSurfaces, deniedSurfaces;
     private int height = 0, width = 0, length = 0, overhang = 0, weight = 1, embed = 0, randomOffMin = 0, randomOffMax = 0;
@@ -38,6 +41,18 @@ public class RuinTemplate
     private final ArrayList<Integer> bonemealMarkers;
     private final ArrayList<AdjoiningTemplateData> adjoiningTemplates;
     private final HashMap<String, AdjoiningGroupData> adjoiningGroups;
+    private boolean isLoaded = false;
+    
+    public static HashMap<String, RuinTemplate> loadedTemplates;
+    public static RuinTemplate load(PrintWriter debugPrinter, File file) throws IOException, Exception {
+    	if (loadedTemplates.containsKey(file.getAbsolutePath())) {
+    		return loadedTemplates.get(file.getAbsolutePath());
+    	}
+    	
+    	RuinTemplate template = new RuinTemplate(debugPrinter, file.getCanonicalPath(), file.getName(), false);
+    	loadedTemplates.put(file.getAbsolutePath(), template);
+    	return template;
+    }
     
     private class AdjoiningTemplateData
     {
@@ -63,17 +78,20 @@ public class RuinTemplate
     {
         // load in the given file as a template
         name = simpleName;
+        this.filename = filename;
         debugPrinter = out;
         debugging = debug;
-        ArrayList<String> lines = new ArrayList<String>();
         rules = new ArrayList<RuinTemplateRule>();
         layers = new ArrayList<RuinTemplateLayer>();
         biomes = new HashSet<String>();
         bonemealMarkers = new ArrayList<Integer>();
         adjoiningTemplates = new ArrayList<AdjoiningTemplateData>();
         adjoiningGroups = new HashMap<String, AdjoiningGroupData>();
-        
-        BufferedReader br = new BufferedReader(new FileReader(filename));
+    }
+    
+    public void load() throws Exception {
+        ArrayList<String> lines = new ArrayList<String>();
+    	BufferedReader br = new BufferedReader(new FileReader(filename));
         String read = br.readLine();
         while (read != null)
         {
@@ -82,6 +100,17 @@ public class RuinTemplate
         }
         parseFile(lines);
         br.close();
+        isLoaded = true;
+    }
+    
+    public void ensureLoaded() {
+    	if (!isLoaded) {
+    		try {
+				load();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+    	}
     }
 
     public RuinTemplate(PrintWriter out, String filename, String simpleName) throws Exception
@@ -112,11 +141,13 @@ public class RuinTemplate
 
     public int getWeight()
     {
+    	ensureLoaded();
         return weight;
     }
 
     public HashSet<String> getBiomesToSpawnIn()
     {
+    	ensureLoaded();
         return biomes;
     }
 
@@ -127,6 +158,8 @@ public class RuinTemplate
 
     public boolean isIgnoredBlock(Block blockID, World world, int x, int y, int z)
     {
+    	ensureLoaded();
+    	
         if (blockID == Blocks.air)
         {
             return true;
@@ -152,6 +185,8 @@ public class RuinTemplate
 
     public boolean preserveBlock(Block blockID, World world, int x, int y, int z)
     {
+    	ensureLoaded();
+    	
         if (preserveWater)
         {
             if (blockID == Blocks.flowing_water)
@@ -183,6 +218,8 @@ public class RuinTemplate
 
     public boolean isAcceptableSurface(Block id)
     {
+    	ensureLoaded();
+    	
         for (Block b : deniedSurfaces)
         {
             if (id == b)
@@ -213,6 +250,8 @@ public class RuinTemplate
 
     public int checkArea(World world, int xBase, int y, int zBase, int rotate, int additionalYRangeChecked)
     {
+    	ensureLoaded();
+    	
         // setup some variable defaults (north/south)
         int x = xBase + w_off;
         int z = zBase + l_off;
@@ -480,6 +519,7 @@ public class RuinTemplate
 
     public RuinData getRuinData(int x, int y, int z, int rotate)
     {
+    	ensureLoaded();
         int add = lbuffer;
         int xMin = 0, xMax = 0, zMin = 0, zMax = 0;
         if ((rotate == RuinsMod.DIR_EAST) || (rotate == RuinsMod.DIR_WEST))
@@ -517,8 +557,9 @@ public class RuinTemplate
         }
     }
     
-    private int doBuildNested(World world, Random random, int xBase, int yBase, int zBase, int rotate)
+    private int doBuildNested(World world, Random random, int xBase, int yBase, int zBase, int rotate) throws Exception
     {
+    	ensureLoaded();
         /*
          * we need to shift the base coordinates and take care of any rotations
          * before we can begin creating the layers.
@@ -664,6 +705,7 @@ public class RuinTemplate
 
     private void doLateRuns(World world, Random random, ArrayList<RuinRuleProcess> laterun, ArrayList<RuinRuleProcess> lastrun)
     {
+    	ensureLoaded();
         for (RuinRuleProcess rp : laterun)
         {
             rp.doBlock(world, random);
@@ -942,7 +984,8 @@ public class RuinTemplate
                     File file = new File(RuinsMod.getMinecraftBaseDir(), "mods/resources/ruins/" + vals[0] + ".tml");
                     if (file.exists() && file.canRead())
                     {
-                        RuinTemplate adjTempl = new RuinTemplate(debugPrinter, file.getCanonicalPath(), file.getName(), false);
+                    	
+                        RuinTemplate adjTempl = RuinTemplate.load(debugPrinter, file);
                         if (adjTempl != null)
                         {
                             AdjoiningTemplateData data = new AdjoiningTemplateData();
