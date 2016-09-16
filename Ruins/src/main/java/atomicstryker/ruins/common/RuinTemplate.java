@@ -305,6 +305,44 @@ public class RuinTemplate
                 }
             }
         }
+        
+
+        final Iterator<RuinTemplateLayer> layeriter = layers.iterator();
+        int iy = newY;
+        while (layeriter.hasNext())
+        {
+            RuinTemplateLayer curlayer = layeriter.next();
+            int rulenum;
+            for (int ix = x; ix < lastX; ix++)
+            {
+                for (int iz = z; iz < lastZ; iz++)
+                {
+                    // check for any testfor blocks (per-block acceptable surfaces)
+                	switch (rotate)
+                    {
+                    case RuinsMod.DIR_EAST:
+                        rulenum = curlayer.getRuleAt(iz - z, xDim - (ix - x + 1));
+                        break;
+                    case RuinsMod.DIR_SOUTH:
+                        rulenum = curlayer.getRuleAt(xDim - (ix - x + 1), zDim - (iz - z + 1));
+                        break;
+                    case RuinsMod.DIR_WEST:
+                        rulenum = curlayer.getRuleAt(zDim - (iz - z + 1), ix - x);
+                        break;
+                    default:
+                        rulenum = curlayer.getRuleAt(ix - x, iz - z);
+                        break;
+                    }
+                	RuinTemplateRule curRule = rules.get(rulenum);
+                    
+                    if (curRule.containsTestforBlocks() && !curRule.testforBlocks(world.getBlock(ix, iy, iz))) {
+                    	return -1;
+                    }
+                }
+            }
+            iy++;
+        }
+    
 
         // looks like a good spot!
         return newY;

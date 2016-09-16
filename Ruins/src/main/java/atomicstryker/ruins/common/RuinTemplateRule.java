@@ -3,6 +3,7 @@ package atomicstryker.ruins.common;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -42,6 +43,8 @@ public class RuinTemplateRule
 {
     private final Block[] blockIDs;
     private final int[] blockMDs;
+    private HashSet<Block> testforBlocks;
+    private final boolean invertTestfor;
     private final String[] blockStrings;
     private final SpecialFlags[] specialFlags;
     private int chance = 100;
@@ -62,6 +65,30 @@ public class RuinTemplateRule
         debugPrinter = dpw;
         owner = r;
         excessiveDebugging = debug;
+        
+        if (rule.indexOf("=>") > -1) {
+        	String testfor = rule.substring(0, rule.indexOf("=>"));
+        	rule = rule.substring(rule.indexOf("=>") + 2);
+        	invertTestfor = testfor.charAt(0) == '!';
+        	if (invertTestfor) {
+        		testfor = testfor.substring(1);
+        	}
+        	
+        	String[] check = testfor.split(",");
+        	testforBlocks = new HashSet<Block>();
+            Block b;
+            for (int x = 0; x < check.length; x++)
+            {
+                b = GameData.getBlockRegistry().getObject(check[x]);
+                if (b != Blocks.air)
+                {
+                	testforBlocks.add(b);
+                }
+            }
+        } else {
+        	testforBlocks = null;
+        	invertTestfor = false;
+        }
         
         ArrayList<String> nbttags = new ArrayList<String>(5);
         rule = replaceNBTTags(rule, nbttags);
@@ -197,6 +224,14 @@ public class RuinTemplateRule
     public RuinTemplateRule(PrintWriter dpw, RuinTemplate r, final String rule) throws Exception
     {
         this(dpw, r, rule, false);
+    }
+    
+    public boolean containsTestforBlocks() {
+    	return testforBlocks != null;
+    }
+    
+    public boolean testforBlocks(Block block) {
+    	return (testforBlocks == null) || (invertTestfor != testforBlocks.contains(block));
     }
     
     /**
