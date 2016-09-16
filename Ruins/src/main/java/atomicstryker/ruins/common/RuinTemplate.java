@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
@@ -36,6 +37,7 @@ public class RuinTemplate
     private boolean preventRotation = false;
     private final ArrayList<Integer> bonemealMarkers;
     private final ArrayList<AdjoiningTemplateData> adjoiningTemplates;
+    private final HashMap<String, AdjoiningGroupData> adjoiningGroups;
     
     private class AdjoiningTemplateData
     {
@@ -44,6 +46,17 @@ public class RuinTemplate
         int acceptableY;
         int relativeZ;
         float spawnchance;
+        boolean isRequired;
+		public String group;
+    }
+    
+    private class AdjoiningGroupData
+    {
+    	boolean isRequired;
+    	ArrayList<AdjoiningTemplateData> childs;
+    	float spawnChance;
+    	int minChilds;
+    	int maxChilds;
     }
     
     public RuinTemplate(PrintWriter out, String filename, String simpleName, boolean debug) throws Exception
@@ -58,6 +71,7 @@ public class RuinTemplate
         biomes = new HashSet<String>();
         bonemealMarkers = new ArrayList<Integer>();
         adjoiningTemplates = new ArrayList<AdjoiningTemplateData>();
+        adjoiningGroups = new HashMap<String, AdjoiningGroupData>();
         
         BufferedReader br = new BufferedReader(new FileReader(filename));
         String read = br.readLine();
@@ -806,6 +820,37 @@ public class RuinTemplate
                 {
                     preventRotation = Integer.parseInt(line.split("=")[1]) == 1;
                 }
+                else if (line.startsWith("adjoining_group"))
+                {
+                	// adjoining_groups=name:spawn_chance:amount,name:spawn_chance:amount,...
+                	String[] vals = line.split("=")[1].split(",");
+                	for (int j = 0; j < vals.length; j++) {
+                		String[] desc = vals[j].split(":");
+                		AdjoiningGroupData group = new AdjoiningGroupData();
+                		group.childs = new ArrayList<AdjoiningTemplateData>();
+                		if (desc.length > 1 && desc[1].equals("required")) {
+                        	group.isRequired = true;
+                        	group.spawnChance = 100f;
+                        } else {
+                        	group.spawnChance = vals.length > 1 ? Float.parseFloat(desc[1]) : 100f;
+                        }
+                		if (desc.length > 2) {
+                			String[] pair = desc[2].split("-");
+                			if (pair.length > 1) {
+                				group.minChilds = Integer.parseInt(pair[0]);
+                				group.maxChilds = Integer.parseInt(pair[1]);
+                			} else {
+                				group.minChilds = Integer.parseInt(pair[0]);
+                				group.maxChilds = group.minChilds;
+                			}
+                		} else {
+                			group.minChilds = 0;
+                			group.maxChilds = -1;
+                		}
+                		
+                		adjoiningGroups.put(desc[0].toLowerCase(), group);
+                	}
+                }
                 else if (line.startsWith("adjoining_template"))
                 {
                     // syntax: adjoining_template=<template>;<relativeX>;<allowedYdifference>;<relativeZ>[;<spawnchance>]
@@ -822,13 +867,38 @@ public class RuinTemplate
                             data.relativeX = Integer.parseInt(vals[1]);
                             data.acceptableY = Integer.parseInt(vals[2]);
                             data.relativeZ = Integer.parseInt(vals[3]);
-                            data.spawnchance = vals.length > 4 ? Float.parseFloat(vals[4]) : 100f;
+                            if (vals.length > 4 && vals[4].equals("required")) {
+                            	data.isRequired = true;
+                            	data.spawnchance = 100f;
+                            } else {
+                            	data.spawnchance = vals.length > 4 ? Float.parseFloat(vals[4]) : 100f;
+                            }
+                            data.group = vals.length > 5 ? vals[5] : null;
                             
                             adjoiningTemplates.add(data);
                         }
                     }
                 }
             }
+        }
+        
+        for (int j = 0; j < adjoiningTemplates.size(); j++) {
+        	AdjoiningTemplateData template = adjoiningTemplates.get(j);
+        	if (template.group != null) {
+        		AdjoiningGroupData group = adjoiningGroups.get(template.group.toLowerCase());
+        		if (group == null) {
+        			debugPrinter.printf("Unknown adjoining group %s for template in ruin %s...\n", template.group, getName());
+        		} else {
+        			group.childs.add(template);
+        		}
+        	}
+        }
+        // Update groups where the max size should be set automatically
+        for (String name : adjoiningGroups.keySet()) {
+        	AdjoiningGroupData group = adjoiningGroups.get(name);
+        	if (group.maxChilds == -1) {
+        		group.maxChilds = group.childs.size();
+        	}
         }
         
         if (acceptedSurfaces == null)
