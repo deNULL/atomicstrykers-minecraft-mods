@@ -177,7 +177,8 @@ public class RuinsMod
                 WorldHandle wh = getWorldHandle(world);
                 if (wh != null)
                 {
-                    if (wh.fileHandle.allowsDimension(world.provider.dimensionId) && !getWorldHandle(world).chunkLogger.catchChunkBug(chunkX, chunkZ))
+                    if (wh.fileHandle.allowsDimension(world.provider.dimensionId) &&
+                    	!getWorldHandle(world).chunkLogger.catchChunkBug(chunkX, chunkZ))
                     {
                         currentlyGenerating.add(tuple);
                         if (world.provider instanceof WorldProviderHell)

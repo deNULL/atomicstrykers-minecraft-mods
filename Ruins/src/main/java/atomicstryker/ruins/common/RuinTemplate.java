@@ -43,7 +43,7 @@ public class RuinTemplate
     private final HashMap<String, AdjoiningGroupData> adjoiningGroups;
     private boolean isLoaded = false;
     
-    public static HashMap<String, RuinTemplate> loadedTemplates;
+    public static HashMap<String, RuinTemplate> loadedTemplates = new HashMap<String, RuinTemplate>();
     public static RuinTemplate load(PrintWriter debugPrinter, File file) throws IOException, Exception {
     	if (loadedTemplates.containsKey(file.getAbsolutePath())) {
     		return loadedTemplates.get(file.getAbsolutePath());
@@ -409,7 +409,7 @@ public class RuinTemplate
         		continue;
         	}
         	
-            if (!doAdjoiningTemplate(ad, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly))
+            if (!doAdjoiningTemplate(ad, ad.spawnchance, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly))
             {
             	return -1;
             }
@@ -420,25 +420,34 @@ public class RuinTemplate
             if (randres < group.spawnChance)
             {
             	int childs = Math.min(group.childs.size(), group.minChilds + rand.nextInt(group.maxChilds - group.minChilds + 1));
+            	
             	int available = group.childs.size();
             	int added = 0;
             	boolean[] tried = new boolean[available];
+            	// Making a roulette wheel choice
             	while (added < childs && available > 0) {
-            		int pos = rand.nextInt(available);
-            		int index = 0;
+            		float sum = 0;
+                	for (int j = 0; j < group.childs.size(); j++) {
+                		if (!tried[j]) {
+                			sum += group.childs.get(j).spawnchance;
+                		}
+                	}
+            		float pos = rand.nextFloat() * sum;
+            		float index = 0f;
             		for (int j = 0; j < tried.length; j++) {
             			if (tried[j]) {
             				continue;
             			}
-            			if (index == pos) {
+            			if (pos >= index && pos <= index + group.childs.get(j).spawnchance) {
             				tried[j] = true;
             				available--;
             				AdjoiningTemplateData template = group.childs.get(j);
-        	        		if (doAdjoiningTemplate(template, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly)) {
+        	        		if (doAdjoiningTemplate(template, 100, world, xBase, y, zBase, rotate, rand, buildRandom, checkOnly)) {
         	        			added++;
         	        		}
+    	        			break;
             			} else {
-            				index++;
+            				index += group.childs.get(j).spawnchance;
             			}
             		}
             	}
@@ -452,7 +461,7 @@ public class RuinTemplate
         return y;
     }
     
-    private boolean doAdjoiningTemplate(AdjoiningTemplateData template, World world, int xBase, int y, int zBase, int rotate, Random rand, Random buildRandom, boolean checkOnly)
+    private boolean doAdjoiningTemplate(AdjoiningTemplateData template, float chance, World world, int xBase, int y, int zBase, int rotate, Random rand, Random buildRandom, boolean checkOnly)
     {
     	int x, z, xDim, zDim;
     	boolean eastwest;
@@ -475,7 +484,7 @@ public class RuinTemplate
         }
     	
     	float randres = (rand.nextFloat() * 100);
-        if (randres < template.spawnchance)
+        if (randres < chance)
         {
             int newrot = rand.nextInt(4);
             int targetX = xBase + template.relativeX;
